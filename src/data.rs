@@ -1,5 +1,4 @@
-type AtomCount = usize;
-type AtomPosition = [f64; 3];
+use super::{AtomCount, AtomPosition};
 
 /// The data for each atom.
 #[derive(Debug)]

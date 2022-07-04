@@ -1,9 +1,12 @@
-mod data;
+pub mod data;
 mod error;
 
 use std::fs::{self, read_to_string};
 use std::io;
 use std::path::Path;
+
+type AtomCount = usize;
+type AtomPosition = [f64; 3];
 
 /// Reads a `.xyz` file.
 pub fn read<P: AsRef<Path>>(path: P) -> error::Result<data::File> {
@@ -17,7 +20,7 @@ pub fn read<P: AsRef<Path>>(path: P) -> error::Result<data::File> {
     };
 
     while line.is_some() {
-        let count: usize = match line.ok_or(error::FileParseError::InvalidAtomCount(line_count))?.parse() {
+        let count: AtomCount = match line.ok_or(error::FileParseError::InvalidAtomCount(line_count))?.parse() {
             Ok(n) => n,
             Err(_) => return Err(error::FileParseError::InvalidAtomCount(line_count)),
         };
@@ -68,7 +71,7 @@ pub fn read<P: AsRef<Path>>(path: P) -> error::Result<data::File> {
     Ok(file)
 }
 
-fn splitwhitespace_to_position(data: &mut std::str::SplitWhitespace, line: &usize) -> error::Result<[f64; 3]> {
+fn splitwhitespace_to_position(data: &mut std::str::SplitWhitespace, line: &usize) -> error::Result<AtomPosition> {
     Ok([
         match data.next().ok_or(error::FileParseError::NoPositionData(*line))?.parse() {
             Ok(n) => n,
