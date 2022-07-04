@@ -1,4 +1,4 @@
-pub mod data;
+mod data;
 mod error;
 
 use std::fs::{self, read_to_string};
