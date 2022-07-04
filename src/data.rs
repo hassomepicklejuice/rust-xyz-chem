@@ -1,7 +1,7 @@
 use super::{AtomCount, AtomPosition};
 
 /// The data for each atom.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AtomData {
     /// The atomic symbol used to represent the element.
     pub symbol: String,
@@ -10,6 +10,7 @@ pub struct AtomData {
 }
 
 /// Represents the data in one block of a `.xyz` file.
+#[derive(Debug, Clone)]
 pub struct Data {
     /// Count of atoms in the structure.
     /// This is found on the first line of the file.
@@ -39,6 +40,7 @@ impl std::fmt::Display for Data {
 }
 
 /// Represents the data in a `.xyz` file.
+#[derive(Debug, Clone)]
 pub struct File {
     /// Vec of data blocks.
     pub data: Vec<Data>,
