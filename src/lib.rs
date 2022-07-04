@@ -1,4 +1,4 @@
-mod data;
+pub mod data;
 mod error;
 
 use std::fs;
@@ -7,7 +7,7 @@ use std::path::Path;
 type AtomCount = usize;
 type AtomPosition = [f64; 3];
 
-/// Reads a `.xyz` file.
+/// Reads a `.xyz` file to a `file` struct.
 pub fn read<P: AsRef<Path>>(path: P) -> error::Result<data::File> {
     let contents = fs::read_to_string(path)?;
     let mut lines = contents.lines();
@@ -87,6 +87,7 @@ fn splitwhitespace_to_position(data: &mut std::str::SplitWhitespace, line: &usiz
     ])
 }
 
+/// Writes a `.xyz` file from a `file` struct.
 pub fn write<P: AsRef<Path>>(path: P, file: data::File) -> std::io::Result<()> {
     let mut contents = String::new();
 
