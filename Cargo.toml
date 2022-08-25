@@ -1,8 +1,8 @@
 [package]
 name = "rust-xyz-chem"
-version = "0.0.2"
+version = "0.1.0beta"
 edition = "2021"
-license = "MIT OR Apache-2.0"
+license = "GPL-2.0-or-later"
 description = "A small crate for reading and writing chemical `.xyz` files."
 repository = "https://github.com/hassomepicklejuice/rust-xyz-chem"
 readme = "README.md"
