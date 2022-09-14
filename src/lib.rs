@@ -1,13 +1,75 @@
+#![allow(unused)]
+
 use std::{
+    error,
     fmt::Display,
     fs,
-    io::{BufRead, BufReader},
+    io::{self, BufRead, BufReader},
+    num,
     path::Path,
+    result,
     str::FromStr,
 };
 
 #[cfg(test)]
 mod tests;
+
+type Result<T> = result::Result<T, ParseError>;
+
+#[derive(Debug)]
+pub struct ParseError {
+    kind: ParseErrorKind,
+    line: usize,
+}
+
+impl ParseError {
+    fn new(kind: ParseErrorKind, line: usize) -> ParseError {
+        ParseError { kind, line }
+    }
+}
+
+impl Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} at line {}", self.kind, self.line)
+    }
+}
+
+#[derive(Debug)]
+enum ParseErrorKind {
+    MissingValue,
+    ParseIntError(num::ParseIntError),
+    ParseFloatError(num::ParseFloatError),
+    ReadError(io::Error),
+}
+
+impl Display for ParseErrorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingValue => write!(f, "Missing label and/or value"),
+            Self::ParseIntError(e) => e.fmt(f),
+            Self::ParseFloatError(e) => e.fmt(f),
+            Self::ReadError(e) => e.fmt(f),
+        }
+    }
+}
+
+impl From<num::ParseIntError> for ParseErrorKind {
+    fn from(err: num::ParseIntError) -> Self {
+        ParseErrorKind::ParseIntError(err)
+    }
+}
+
+impl From<num::ParseFloatError> for ParseErrorKind {
+    fn from(err: num::ParseFloatError) -> Self {
+        ParseErrorKind::ParseFloatError(err)
+    }
+}
+
+impl From<io::Error> for ParseErrorKind {
+    fn from(err: io::Error) -> Self {
+        ParseErrorKind::ReadError(err)
+    }
+}
 
 /// A position vector is an array of `f64` in 3 dimensions
 #[derive(Debug, PartialEq)]
@@ -37,14 +99,14 @@ impl Display for Atom {
 }
 
 impl FromStr for Atom {
-    type Err = Box<dyn std::error::Error>;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut string = s.split_whitespace();
+    type Err = ParseErrorKind;
+    fn from_str(line: &str) -> result::Result<Self, Self::Err> {
+        let mut line = line.split_whitespace();
 
-        let label = string.next().unwrap().to_string();
-        let x = string.next().unwrap().parse()?;
-        let y = string.next().unwrap().parse()?;
-        let z = string.next().unwrap().parse()?;
+        let label = line.next().ok_or(ParseErrorKind::MissingValue)?.to_string();
+        let x = line.next().ok_or(ParseErrorKind::MissingValue)?.parse()?;
+        let y = line.next().ok_or(ParseErrorKind::MissingValue)?.parse()?;
+        let z = line.next().ok_or(ParseErrorKind::MissingValue)?.parse()?;
 
         Ok(Atom {
             label,
@@ -110,8 +172,8 @@ impl Display for File {
 }
 
 impl TryFrom<BufReader<fs::File>> for File {
-    type Error = Box<dyn std::error::Error>;
-    fn try_from(r: BufReader<fs::File>) -> Result<Self, Self::Error> {
+    type Error = ParseError;
+    fn try_from(reader: BufReader<fs::File>) -> result::Result<Self, Self::Error> {
         enum ParseState {
             Count,
             Comment,
@@ -119,19 +181,21 @@ impl TryFrom<BufReader<fs::File>> for File {
         }
         use ParseState::*;
 
-        let lines = r.lines();
+        let lines = reader.lines();
         let mut file = File::new();
         let mut record = Record::new();
         let mut parse_state = Count;
 
-        for line in lines {
-            let line = line?;
+        for (line_nr, line) in lines.enumerate() {
+            let line = line.or_else(|err| Err(ParseError::new(err.into(), line_nr)))?;
             (record, parse_state) = match parse_state {
                 Count => {
                     if line.is_empty() {
                         (record, Count)
                     } else {
-                        record.count = line.parse()?;
+                        record.count = line.parse().or_else(|err: num::ParseIntError| {
+                            Err(ParseError::new(err.into(), line_nr))
+                        })?;
                         (record, Comment)
                     }
                 }
@@ -140,7 +204,10 @@ impl TryFrom<BufReader<fs::File>> for File {
                     (record, Atoms)
                 }
                 Atoms => {
-                    record.atoms.push(line.parse()?);
+                    record.atoms.push(
+                        line.parse()
+                            .or_else(|err| Err(ParseError::new(err, line_nr)))?,
+                    );
                     if record.atoms.len() < record.count {
                         (record, Atoms)
                     } else {
@@ -156,7 +223,8 @@ impl TryFrom<BufReader<fs::File>> for File {
 }
 
 /// Reads a chemical `.xyz` file
-pub fn read<P: AsRef<Path>>(path: P) -> Result<File, Box<dyn std::error::Error>> {
-    let reader = BufReader::new(fs::File::open(path)?);
+pub fn read<P: AsRef<Path>>(path: P) -> Result<File> {
+    let reader =
+        BufReader::new(fs::File::open(path).or_else(|err| Err(ParseError::new(err.into(), 0)))?);
     File::try_from(reader)
 }
