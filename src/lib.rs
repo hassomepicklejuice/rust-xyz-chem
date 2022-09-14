@@ -1,8 +1,17 @@
-use std::{str::FromStr, num::ParseFloatError, io::{BufReader, BufRead}, path::Path, fs, fmt::Display};
+use std::{
+    fmt::Display,
+    fs,
+    io::{BufRead, BufReader},
+    path::Path,
+    str::FromStr,
+};
+
+#[cfg(test)]
+mod tests;
 
 /// A position vector is an array of `f64` in 3 dimensions
-#[derive(Debug)]
-pub struct Position {
+#[derive(Debug, PartialEq)]
+struct Position {
     x: f64,
     y: f64,
     z: f64,
@@ -15,8 +24,8 @@ impl Display for Position {
 }
 
 /// An atom is represented by a label ('C' for carbon, 'Ne' for Neon, ...) and a position
-#[derive(Debug)]
-pub struct Atom {
+#[derive(Debug, PartialEq)]
+struct Atom {
     label: String,
     position: Position,
 }
@@ -28,21 +37,19 @@ impl Display for Atom {
 }
 
 impl FromStr for Atom {
-    type Err = ParseFloatError;
+    type Err = Box<dyn std::error::Error>;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let string: Vec<&str> = s.split_whitespace().collect();
+        let mut string = s.split_whitespace();
 
-        let label = string[0].to_string();
-        let x = string[1].parse()?;
-        let y = string[2].parse()?;
-        let z = string[3].parse()?;
+        let label = string.next().unwrap().to_string();
+        let x = string.next().unwrap().parse()?;
+        let y = string.next().unwrap().parse()?;
+        let z = string.next().unwrap().parse()?;
 
-        Ok(
-            Atom {
-                label,
-                position: Position { x, y, z }
-            }
-        )
+        Ok(Atom {
+            label,
+            position: Position { x, y, z },
+        })
     }
 }
 
@@ -67,17 +74,17 @@ impl Record {
 
 impl Display for Record {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut s = format!("{}\n{}\n", self.count, self.comment);
+        writeln!(f, "{}\n{}", self.count, self.comment)?;
         for atom in &self.atoms {
-            s.push_str(&format!("{atom}"));
+            writeln!(f, "{atom}")?;
         }
-        write!(f, "{s}")
+        Ok(())
     }
 }
 
 /// A file is a vec of records
 #[derive(Debug)]
-pub struct File { 
+pub struct File {
     records: Vec<Record>,
 }
 
@@ -87,16 +94,24 @@ impl File {
             records: Vec::new(),
         }
     }
-    
+
     fn push(&mut self, record: Record) {
         self.records.push(record);
+    }
+}
+
+impl Display for File {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for record in &self.records {
+            writeln!(f, "{record}")?;
+        }
+        Ok(())
     }
 }
 
 impl TryFrom<BufReader<fs::File>> for File {
     type Error = Box<dyn std::error::Error>;
     fn try_from(r: BufReader<fs::File>) -> Result<Self, Self::Error> {
-
         enum ParseState {
             Count,
             Comment,
@@ -119,11 +134,11 @@ impl TryFrom<BufReader<fs::File>> for File {
                         record.count = line.parse()?;
                         (record, Comment)
                     }
-                },
+                }
                 Comment => {
                     record.comment = line;
                     (record, Atoms)
-                },
+                }
                 Atoms => {
                     record.atoms.push(line.parse()?);
                     if record.atoms.len() < record.count {
@@ -132,7 +147,7 @@ impl TryFrom<BufReader<fs::File>> for File {
                         file.push(record);
                         (Record::new(), Count)
                     }
-                },
+                }
             };
         }
 
@@ -145,4 +160,3 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<File, Box<dyn std::error::Error>>
     let reader = BufReader::new(fs::File::open(path)?);
     File::try_from(reader)
 }
-
