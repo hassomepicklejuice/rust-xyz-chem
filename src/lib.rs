@@ -230,14 +230,14 @@ impl TryFrom<BufReader<fs::File>> for File {
         let mut parse_state = ParseState::Count;
 
         for (line_nr, line) in lines.enumerate() {
-            let line = line.or_else(|err| Err(ParseError::new(err.into(), line_nr)))?;
+            let line = line.map_err(|err| ParseError::new(err.into(), line_nr))?;
             (record, parse_state) = match parse_state {
                 ParseState::Count => {
                     if line.is_empty() {
                         (record, ParseState::Count)
                     } else {
-                        record.count = line.parse().or_else(|err: num::ParseIntError| {
-                            Err(ParseError::new(err.into(), line_nr))
+                        record.count = line.parse().map_err(|err: num::ParseIntError| {
+                            ParseError::new(err.into(), line_nr)
                         })?;
                         (record, ParseState::Comment)
                     }
@@ -247,10 +247,9 @@ impl TryFrom<BufReader<fs::File>> for File {
                     (record, ParseState::Atoms)
                 }
                 ParseState::Atoms => {
-                    record.atoms.push(
-                        line.parse()
-                            .or_else(|err| Err(ParseError::new(err, line_nr)))?,
-                    );
+                    record
+                        .atoms
+                        .push(line.parse().map_err(|err| ParseError::new(err, line_nr))?);
                     if record.atoms.len() < record.count {
                         (record, ParseState::Atoms)
                     } else {
@@ -268,6 +267,6 @@ impl TryFrom<BufReader<fs::File>> for File {
 /// Reads a chemical `.xyz` file to the [`File`] type.
 pub fn read<P: AsRef<Path>>(path: P) -> Result<File> {
     let reader =
-        BufReader::new(fs::File::open(path).or_else(|err| Err(ParseError::new(err.into(), 0)))?);
+        BufReader::new(fs::File::open(path).map_err(|err| ParseError::new(err.into(), 0))?);
     File::try_from(reader)
 }
